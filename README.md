@@ -35,7 +35,7 @@ It is free but there is **NO** support. If you want to add functionality, feel f
 
 **Download**
 
-[Install Steam Economy Enhancer](https://raw.githubusercontent.com/Nuklon/Steam-Economy-Enhancer/master/code.user.js)
+[Install Steam Economy Enhancer](https://raw.githubusercontent.com/SeRi0uS007/Steam-Economy-Enhancer/master/code.user.js)
 
 *Violentmonkey or Tampermonkey is required to install.*
 
@@ -60,6 +60,11 @@ It is free but there is **NO** support. If you want to add functionality, feel f
 *Trade offers*
 
 ![Tradeoffers](http://i.imgur.com/vdVeXHi.png)
+
+**Fork features**
+
+*    Sell stacked items
+*    Sound notify(use null in configurator if want to disable it)
 
 **License**
 
