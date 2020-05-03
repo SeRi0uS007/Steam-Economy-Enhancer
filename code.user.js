@@ -3,7 +3,7 @@
 // @namespace   https://github.com/SeRi0uS007
 // @author      Nuklon(Dev), SeRi0uS007(Mod)
 // @license     MIT
-// @version     6.8.1
+// @version     6.8.2
 // @description Enhances the Steam Inventory and Steam Market.
 // @include     *://steamcommunity.com/id/*/inventory*
 // @include     *://steamcommunity.com/profiles/*/inventory*
@@ -43,7 +43,7 @@
   const COLOR_PRICE_FAIR = '#496424';
   const COLOR_PRICE_CHEAP = '#837433';
   const COLOR_PRICE_EXPENSIVE = '#813030';
-  const COLOR_PRICE_NOT_CHECKED = '#26566c';
+  const COLOR_PRICE_IGNORING = '#26566c';
 
   const ERROR_SUCCESS = null;
   const ERROR_FAILED = 1;
@@ -105,7 +105,7 @@
   const SETTING_MIN_MISC_PRICE = 'SETTING_MIN_MISC_PRICE';
   const SETTING_MAX_MISC_PRICE = 'SETTING_MAX_MISC_PRICE';
   const SETTING_PRICE_OFFSET = 'SETTING_PRICE_OFFSET';
-  const SETTING_PRICE_MIN_CHECK_PRICE = 'SETTING_PRICE_MIN_CHECK_PRICE';
+  const SETTING_PRICE_MIN_IGNORING_PRICE = 'SETTING_PRICE_MIN_IGNORING_PRICE';
   const SETTING_PRICE_ALGORITHM = 'SETTING_PRICE_ALGORITHM';
   const SETTING_PRICE_IGNORE_LOWEST_Q = 'SETTING_PRICE_IGNORE_LOWEST_Q';
   const SETTING_PRICE_HISTORY_HOURS = 'SETTING_PRICE_HISTORY_HOURS';
@@ -1132,71 +1132,88 @@
       }
     }
 
-    var sellQueue = async.queue(function (task, next) {
-        market.sellItem(task.item,
-          task.sellPrice,
-          function (err, data) {
-            totalNumberOfProcessedQueueItems++;
+      var sellQueue = async.queue(function (task, next) {
+          if (market.getPriceIncludingFees(task.sellPrice) <= getSettingWithDefault(SETTING_PRICE_MIN_IGNORING_PRICE) * 100) {
+              totalNumberOfProcessedQueueItems++;
 
-            var digits = getNumberOfDigits(totalNumberOfQueuedItems);
-            var itemId = task.item.assetid || task.item.id;
-            var itemName = task.item.name || task.item.description.name;
-            itemName += parseInt(task.item.amount) > 1 ? ` (x${task.item.amount})` : '';
-            var padLeft = padLeftZero('' + totalNumberOfProcessedQueueItems, digits) + ' / ' + totalNumberOfQueuedItems;
+              var digits = getNumberOfDigits(totalNumberOfQueuedItems);
+              var itemId = task.item.assetid || task.item.id;
+              var itemName = task.item.name || task.item.description.name;
+              itemName += parseInt(task.item.amount) > 1 ? ` (x${task.item.amount})` : '';
+              var padLeft = padLeftZero('' + totalNumberOfProcessedQueueItems, digits) + ' / ' + totalNumberOfQueuedItems;
 
-            if (!err) {
-              logDOM(padLeft +
-                ' - ' +
-                itemName +
-                ' listed for ' +
-                (market.getPriceIncludingFees(task.sellPrice) * parseInt(task.item.amount) / 100.0).toFixed(2) +
-                currencySymbol +
-                ', you will receive ' +
-                (task.sellPrice * parseInt(task.item.amount) / 100.0).toFixed(2) + currencySymbol +
-                '.');
+              logDOM(padLeft + ' - ' + itemName + ' is not listed due to ignoring price settings.');
 
-              $('#' + task.item.appid + '_' + task.item.contextid + '_' + itemId)
-                .css('background', COLOR_SUCCESS);
+              $('#' + task.item.appid + '_' + task.item.contextid + '_' + itemId).css('background', COLOR_PRICE_IGNORING);
+              if (totalNumberOfQueuedItems === totalNumberOfProcessedQueueItems) {
+                  soundEffect.play();
+              }
+              next();
+          } else {
+          market.sellItem(task.item,
+              task.sellPrice,
+              function (err, data) {
+                  totalNumberOfProcessedQueueItems++;
 
-              totalPriceWithoutFeesOnMarket += task.sellPrice * parseInt(task.item.amount);
-              totalPriceWithFeesOnMarket += market.getPriceIncludingFees(task.sellPrice) * parseInt(task.item.amount);
-              updateTotals();
-            } else if (data != null && isRetryMessage(data.message)) {
-              logDOM(padLeft +
-                ' - ' +
-                itemName +
-                ' retrying listing because ' +
-                data.message[0].toLowerCase() +
-                data.message.slice(1));
+                  var digits = getNumberOfDigits(totalNumberOfQueuedItems);
+                  var itemId = task.item.assetid || task.item.id;
+                  var itemName = task.item.name || task.item.description.name;
+                  itemName += parseInt(task.item.amount) > 1 ? ` (x${task.item.amount})` : '';
+                  var padLeft = padLeftZero('' + totalNumberOfProcessedQueueItems, digits) + ' / ' + totalNumberOfQueuedItems;
 
-              totalNumberOfProcessedQueueItems--;
-              sellQueue.unshift(task);
-              sellQueue.pause();
+                  if (!err) {
+                      logDOM(padLeft +
+                          ' - ' +
+                          itemName +
+                          ' listed for ' +
+                          (market.getPriceIncludingFees(task.sellPrice) * parseInt(task.item.amount) / 100.0).toFixed(2) +
+                          currencySymbol +
+                          ', you will receive ' +
+                          (task.sellPrice * parseInt(task.item.amount) / 100.0).toFixed(2) + currencySymbol +
+                          '.');
 
-              setTimeout(function () {
-                sellQueue.resume();
-              }, getRandomInt(30000, 45000));
-            } else {
-              if (data != null && data.responseJSON != null && data.responseJSON.message != null) {
-                logDOM(padLeft +
-                  ' - ' +
-                  itemName +
-                  ' not added to market because ' +
-                  data.responseJSON.message[0].toLowerCase() +
-                  data.responseJSON.message.slice(1));
-              } else
-                logDOM(padLeft + ' - ' + itemName + ' not added to market.');
+                      $('#' + task.item.appid + '_' + task.item.contextid + '_' + itemId)
+                          .css('background', COLOR_SUCCESS);
 
-              $('#' + task.item.appid + '_' + task.item.contextid + '_' + itemId)
-                .css('background', COLOR_ERROR);
-            }
-            if (totalNumberOfQueuedItems === totalNumberOfProcessedQueueItems) {
-              soundEffect.play();
-            }
-            next();
-          });
-      },
-      1);
+                      totalPriceWithoutFeesOnMarket += task.sellPrice * parseInt(task.item.amount);
+                      totalPriceWithFeesOnMarket += market.getPriceIncludingFees(task.sellPrice) * parseInt(task.item.amount);
+                      updateTotals();
+                  } else if (data != null && isRetryMessage(data.message)) {
+                      logDOM(padLeft +
+                          ' - ' +
+                          itemName +
+                          ' retrying listing because ' +
+                          data.message[0].toLowerCase() +
+                          data.message.slice(1));
+
+                      totalNumberOfProcessedQueueItems--;
+                      sellQueue.unshift(task);
+                      sellQueue.pause();
+
+                      setTimeout(function () {
+                          sellQueue.resume();
+                      }, getRandomInt(30000, 45000));
+                  } else {
+                      if (data != null && data.responseJSON != null && data.responseJSON.message != null) {
+                          logDOM(padLeft +
+                              ' - ' +
+                              itemName +
+                              ' not added to market because ' +
+                              data.responseJSON.message[0].toLowerCase() +
+                              data.responseJSON.message.slice(1));
+                      } else
+                          logDOM(padLeft + ' - ' + itemName + ' not added to market.');
+
+                      $('#' + task.item.appid + '_' + task.item.contextid + '_' + itemId)
+                          .css('background', COLOR_ERROR);
+                  }
+                  if (totalNumberOfQueuedItems === totalNumberOfProcessedQueueItems) {
+                      soundEffect.play();
+                  }
+                  next();
+              });
+          }
+      }, 1);
 
     sellQueue.drain = function () {
       onQueueDrain();
@@ -2352,8 +2369,8 @@
       var game_name = asset.type;
       var price = getPriceFromMarketListing($('.market_listing_price > span:nth-child(1) > span:nth-child(1)', listingUI).text());
 
-      if (price <= getSettingWithDefault(SETTING_PRICE_MIN_CHECK_PRICE) * 100) {
-        $('.market_listing_my_price', listingUI).last().css('background', COLOR_PRICE_NOT_CHECKED);
+      if (price <= getSettingWithDefault(SETTING_PRICE_MIN_IGNORING_PRICE) * 100) {
+        $('.market_listing_my_price', listingUI).last().css('background', COLOR_PRICE_IGNORING);
         $('.market_listing_my_price', listingUI).last().prop('title', 'The price is not checked.');
         listingUI.addClass('not_checked');
 
@@ -3412,7 +3429,7 @@
       '<br/>' +
       '</div>' +
       '<div style="margin-top:6px;">' +
-      'Don\'t check market listings with prices of and below:&nbsp;<input class="price_option_input price_option_price" style="background-color: black;color: white;border: transparent;" type="number" step="0.01" id="' + SETTING_PRICE_MIN_CHECK_PRICE + '" value=' + getSettingWithDefault(SETTING_PRICE_MIN_CHECK_PRICE) + '>' +
+      'Fully ignore items with prices of and below:&nbsp;<input class="price_option_input price_option_price" style="background-color: black;color: white;border: transparent;" type="number" step="0.01" id="' + SETTING_PRICE_MIN_IGNORING_PRICE + '" value=' + getSettingWithDefault(SETTING_PRICE_MIN_IGNORING_PRICE) + '>' +
       '<br/>' +
       '</div>' +
       '<div style="margin-top:24px">' +
@@ -3458,7 +3475,7 @@
       setSetting(SETTING_MIN_MISC_PRICE, $('#' + SETTING_MIN_MISC_PRICE, price_options).val());
       setSetting(SETTING_MAX_MISC_PRICE, $('#' + SETTING_MAX_MISC_PRICE, price_options).val());
       setSetting(SETTING_PRICE_OFFSET, $('#' + SETTING_PRICE_OFFSET, price_options).val());
-      setSetting(SETTING_PRICE_MIN_CHECK_PRICE, $('#' + SETTING_PRICE_MIN_CHECK_PRICE, price_options).val());
+      setSetting(SETTING_PRICE_MIN_IGNORING_PRICE, $('#' + SETTING_PRICE_MIN_IGNORING_PRICE, price_options).val());
       setSetting(SETTING_PRICE_ALGORITHM, $('#' + SETTING_PRICE_ALGORITHM, price_options).val());
       setSetting(SETTING_PRICE_IGNORE_LOWEST_Q, $('#' + SETTING_PRICE_IGNORE_LOWEST_Q, price_options).prop('checked') ? 1 : 0);
       setSetting(SETTING_PRICE_HISTORY_HOURS, $('#' + SETTING_PRICE_HISTORY_HOURS, price_options).val());
