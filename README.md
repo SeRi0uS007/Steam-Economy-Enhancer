@@ -65,6 +65,7 @@ It is free but there is **NO** support. If you want to add functionality, feel f
 
 *    Sell stacked items
 *    Sound notify(use null in configurator if want to disable it)
+*    Option to ignoring price while listing
 
 **License**
 
